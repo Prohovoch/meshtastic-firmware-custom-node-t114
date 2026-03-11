@@ -12,6 +12,7 @@ LockGuard::LockGuard(Lock *lock) : lock(lock)
 LockGuard::~LockGuard()
 {
     lock->unlock();
+    
 }
 
 } // namespace concurrency

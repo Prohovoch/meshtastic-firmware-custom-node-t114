@@ -16,7 +16,10 @@
       "extensions": [
         "ms-vscode.cpptools",
         "platformio.platformio-ide",
-        "Trunk.io"
+        "Trunk.io",
+        "mhutchie.git-graph",
+        "PKief.material-icon-theme",
+        "GitHub.github-vscode-theme"
       ],
       "unwantedRecommendations": ["ms-azuretools.vscode-docker"],
       "settings": {
