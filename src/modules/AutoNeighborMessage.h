@@ -3,7 +3,7 @@
 #include "concurrency/OSThread.h"
 
 /**
- * Модуль автоматической отправки широковещательных сообщений соседям через заданный интервал.
+ * Automated mesh packet sender.
  */
 class AutoNeighborMessage : public SinglePortModule, public concurrency::OSThread
 {

@@ -23,7 +23,8 @@
       ],
       "unwantedRecommendations": ["ms-azuretools.vscode-docker"],
       "settings": {
-        "extensions.ignoreRecommendations": true
+        "extensions.ignoreRecommendations": true,
+        "platformio-ide.autoRebuildAutocompleteIndex": true
       }
     }
   },
@@ -33,12 +34,11 @@
 
   // Use "--device=" to make a local device available inside the container.
   "runArgs": [
-  "--device=/dev/ttyACM0",    
-  "--group-add",
-    "dialout",
-  "--group-add",
-    "plugdev" ],
+    "--device=/dev/ttyACM0", 
+    "--group-add", "dialout", 
+    "--group-add", "plugdev" ],
 
   // Run commands to prepare the container for use
-  "postCreateCommand": ".devcontainer/setup.sh"
+  "postCreateCommand": ".devcontainer/setup.sh",
+  "remoteUser": "vscode"
 }
