@@ -1,82 +1,19 @@
 #include "AutoNeighborMessage.h"
 #include "MeshService.h"
-<<<<<<< HEAD
-#include "configuration.h"
-=======
 #include "NodeDB.h"
 #include "RTC.h" // для RTCQualityNTR
 #include "configuration.h"
 #include "gps/GeoCoord.h"
->>>>>>> 2d6cff331 (Добавлен модуль AutoNeighborMessage: отправка позиции соседям с hop_limit=0 при перемещении, нахождении рядом с соседом или по таймеру.)
 #include "mesh/generated/meshtastic/portnums.pb.h"
 #include <Arduino.h>
 #include <algorithm>
 
-<<<<<<< HEAD
-// Global pointer to a autoneighbour
-AutoNeighborMessage *autoNeighborMessage;
-// Making a position logs.
-=======
 AutoNeighborMessage *autoNeighborMessage = nullptr;
 
 // Конструктор модуля
->>>>>>> 2d6cff331 (Добавлен модуль AutoNeighborMessage: отправка позиции соседям с hop_limit=0 при перемещении, нахождении рядом с соседом или по таймеру.)
 AutoNeighborMessage::AutoNeighborMessage()
-    : SinglePortModule("AutoNeighborMessage", meshtastic_PortNum_POSITION_APP), concurrency::OSThread("AutoNeighborMessage")
+    : ProtobufModule("AutoNeighborMessage", meshtastic_PortNum_POSITION_APP, &meshtastic_Position_msg), concurrency::OSThread("AutoNeighborMessage")
 {
-<<<<<<< HEAD
-    // Logs for module creation
-    LOG_INFO("AutoNeighborMessage module constructed");
-}
-// Module begin its job here.
-int32_t AutoNeighborMessage::runOnce()
-{
-    LOG_INFO("AutoNeighborMessage runOnce started");
-
-    //FIXME: potential problem with node. WDYM auto, node btw gets a LITE object, not an object we need
-    // so we need to refactor it.
-    auto node = nodeDB->getMeshNode(nodeDB->getNodeNum());
-    if (!node || !node->has_position || node->position.latitude_i == 0) {
-        LOG_WARN("No valid position in nodeDB yet. Skipping send.");
-        return 60000; // Попробуем снова через 30 секунд
-    }
-
-   
-    // Creating a position structure for data. Initializing and making a proto info
-    // Potential warning: node is a node LITE object, which is not containing any LDOP or HDOP fields.
-    
-    // refactor, maybe... or not
-    meshtastic_Position currPos = meshtastic_Position_init_default;
-    currPos.latitude_i = node->position.latitude_i;
-    currPos.longitude_i = node->position.longitude_i;
-    currPos.altitude = node->position.altitude;
-    currPos.time = node->position.time;
-    
-    // just for logs tests.
-    LOG_INFO("Encoding Position: Lat=%d, Lon=%d, Alt=%d, Time=%u,",
-          currPos.latitude_i, 
-          currPos.longitude_i, 
-          currPos.altitude,
-          currPos.time);
-
-    // Making a meshpacket here. its ok.
-    meshtastic_MeshPacket *p = allocDataPacket();
-    if (!p) {
-        LOG_ERROR("allocDataPacket failed");
-        return 60000; // повторим через 30 секунд
-    }
-    // Nanopb proto serialization. For future cycle mb refactor or making a normal method/procedure
-    pb_ostream_t stream = pb_ostream_from_buffer(p->decoded.payload.bytes, sizeof(p->decoded.payload.bytes));
-    if(!pb_encode(&stream, meshtastic_Position_fields, &currPos)){
-        LOG_ERROR("Encoding failed!");
-        service->releaseToPool(p);
-        return 60000;
-    }
-    // logging for proto, hex format
-    LOG_DEBUG("Protobuf bytes (%d):", stream.bytes_written);
-    for (size_t i = 0; i < stream.bytes_written; i++) {
-        LOG_DEBUG("%02x ", p->decoded.payload.bytes[i]);
-=======
     // Принимаем все пакеты POSITION_APP, даже не адресованные нам
     isPromiscuous = true;
     // Первый вызов runOnce через 10 секунд, затем периодически каждые 10 секунд
@@ -125,6 +62,52 @@ void AutoNeighborMessage::sendPosition(float lat, float lon, const char *reason)
     LOG_INFO("Sent Position to neighbors (reason: %s): lat=%.6f lon=%.6f", reason, lat, lon);
 }
 
+
+// К сожалению не смог найти способа как можно отправить как протобафф, поэтому пусть это будет заготовка на будущее
+
+// Вообще причина кроется в  PositionAPP - мы не можем использовать протобафф энкодер для других типов структур, капец короче.
+
+void AutoNeighborMessage::sendProtobufData(const protobufSender &rawPacket, const char *reason){ // К сожалению не протобуф
+    
+    meshtastic_Data rawData = meshtastic_Data_init_default;
+    rawData.portnum = meshtastic_PortNum_PRIVATE_APP;
+    size_t reasonLen = strlen(reason) + 1; // '/0'
+    size_t packetSize = (rawPacket.payload != nullptr) ? sizeof(NeighborPos) : 0;
+    if (reasonLen + packetSize > sizeof(rawData.payload.bytes)){
+        LOG_INFO("Packet is too big, skipping");
+        return;
+    }
+    // добавляем причину
+    if(reasonLen > 0){
+        memcpy(rawData.payload.bytes, reason,  reasonLen);
+    }
+    // добвляем данные
+    if (packetSize > 0){
+        memcpy(rawData.payload.bytes, rawPacket.payload, packetSize);
+    }
+
+    rawData.payload.size = reasonLen + packetSize;
+    
+    // вот это стоило бы сменить на что-то другое
+    meshtastic_MeshPacket *p = allocDataPacket();
+    if(!p){
+        LOG_ERROR("Failed to allocate meshpacket");
+        service->releaseToPool(p);
+    }
+    // конфигурирование
+    p->which_payload_variant = meshtastic_MeshPacket_decoded_tag;
+    p->decoded = rawData;
+    p->from = rawPacket.senderId;
+    
+      
+    p->to = rawPacket.isBroadcast ? 0xFFFFFFFF : rawPacket.destNodeId;
+    p->hop_limit = rawPacket.isBroadcast ? 3 : 0;  // можешь менять как нужно
+    p->want_ack = !rawPacket.isBroadcast; // по стандарту false
+    
+    service->sendToMesh(p);
+
+}
+
 // Расчёт расстояния между двумя точками в метрах (из модуля)
 float AutoNeighborMessage::calculateDistance(float lat1, float lon1, float lat2, float lon2)
 {
@@ -136,8 +119,10 @@ void AutoNeighborMessage::cleanupNeighbors()
 {
     uint32_t nowMs = millis();
     size_t oldSize = neighbors.size();
-    neighbors.erase(std::remove_if(neighbors.begin(), neighbors.end(), // I like JS style :)
-                                   [nowMs](const NeighborPos &n) { return (nowMs - n.lastSeenMs) > AUTO_NEIGHBOR_CLEANUP_MS; }),
+
+    // ... this is bad asf. BURN IT AND THROUGH AWAY AAAAAA.
+    neighbors.erase(std::remove_if(neighbors.begin(), neighbors.end(), // I like JS style :) ---> I hate ni.. i mean i hate JS style so damn bad >:(
+    [nowMs](const NeighborPos &n) { return (nowMs - n.lastSeenMs) > AUTO_NEIGHBOR_CLEANUP_MS; }),
                     neighbors.end());
     if (oldSize != neighbors.size()) {
         LOG_DEBUG("Cleaned up %zu stale neighbors", oldSize - neighbors.size());
@@ -202,24 +187,25 @@ int32_t AutoNeighborMessage::runOnce()
 
     if (shouldSend) {
         sendPosition(lat, lon, sendReason);
->>>>>>> 2d6cff331 (Добавлен модуль AutoNeighborMessage: отправка позиции соседям с hop_limit=0 при перемещении, нахождении рядом с соседом или по таймеру.)
+
+        protobufSender rawPacket;
+        // Нужно менять будет  
+        NeighborPos currentPos;
+        currentPos.nodeId = myNode->num;
+        currentPos.lat = myNode->position.latitude_i;
+        currentPos.lon = myNode->position.longitude_i;
+        currentPos.alt = myNode->position.altitude;
+        currentPos.lastSeenMs = nowMs;
+
+        // Тоже самое.
+        protobufSender rawPacket;
+        rawPacket.senderId = myNode->num;
+        rawPacket.destNodeId = 0xFFFFFFFF; // BROADCAST
+        rawPacket.isBroadcast = true;      // Рассылка по умолчанию
+        rawPacket.payload = &currentPos;   // Передаем адрес структуры
+        sendProtobufData(rawPacket, sendReason);
     }
-    LOG_DEBUG("\n");
 
-<<<<<<< HEAD
-
-    // sending to mesh using protobuf
-    p->decoded.payload.size = stream.bytes_written;
-    p->decoded.portnum = meshtastic_PortNum_POSITION_APP;
-    
- 
-    service->sendToMesh(p, RX_SRC_LOCAL, false);
-
-    
-
-    
-    return 60000;
-=======
     return 10000; // следующий вызов через 10 секунд
 }
 
@@ -258,5 +244,4 @@ bool AutoNeighborMessage::handleReceivedProtobuf(const meshtastic_MeshPacket &mp
     }
     // Возвращаем false, чтобы другие модули тоже могли обработать пакет
     return false;
->>>>>>> 2d6cff331 (Добавлен модуль AutoNeighborMessage: отправка позиции соседям с hop_limit=0 при перемещении, нахождении рядом с соседом или по таймеру.)
 }

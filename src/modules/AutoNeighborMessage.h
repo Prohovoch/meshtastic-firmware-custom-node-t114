@@ -1,10 +1,6 @@
 #pragma once
-<<<<<<< HEAD
-#include "SinglePortModule.h"
-=======
 
 #include "ProtobufModule.h"
->>>>>>> 2d6cff331 (Добавлен модуль AutoNeighborMessage: отправка позиции соседям с hop_limit=0 при перемещении, нахождении рядом с соседом или по таймеру.)
 #include "concurrency/OSThread.h"
 #include <vector>
 
@@ -33,33 +29,20 @@ struct NeighborPos {
     uint32_t lastSeenMs; // время последнего получения (millis)
 };
 
-/**
-<<<<<<< HEAD
- * Automated mesh packet sender.
-=======
- * Модуль AutoNeighborMessage предназначен для автоматической отправки
- * широковещательных пакетов позиции (Position) с hop_limit = 0,
- * чтобы они достигали только прямых соседей.
- *
- * Условия отправки:
- *   - При перемещении узла на расстояние > AUTO_NEIGHBOR_DIST_THRESHOLD_M
- *   - Если рядом (в пределах порога) находится хотя бы один сосед,
- *     но не чаще чем AUTO_NEIGHBOR_SEND_INTERVAL_MS
- *   - По таймеру AUTO_NEIGHBOR_TIME_INTERVAL_MS (периодическая отправка)
- *
- * Модуль также собирает информацию о соседях из входящих Position-пакетов
- * и удаляет устаревшие записи через AUTO_NEIGHBOR_CLEANUP_MS.
->>>>>>> 2d6cff331 (Добавлен модуль AutoNeighborMessage: отправка позиции соседям с hop_limit=0 при перемещении, нахождении рядом с соседом или по таймеру.)
- */
-class AutoNeighborMessage : public SinglePortModule, public concurrency::OSThread
+struct protobufSender{
+  uint32_t senderId; // id ноды отправителя
+  uint32_t destNodeId;// id ноды получателя
+  bool isBroadcast = false; // проверка на broadcast, по стандарту false
+  const NeighborPos* payload; // полезные данные };
+};
+
+class AutoNeighborMessage : public ProtobufModule<meshtastic_Position>, public concurrency::OSThread
 {
   public:
     AutoNeighborMessage();
 
   protected:
     virtual int32_t runOnce() override;
-<<<<<<< HEAD
-=======
     virtual bool handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_Position *p) override;
 
   private:
@@ -72,9 +55,9 @@ class AutoNeighborMessage : public SinglePortModule, public concurrency::OSThrea
     std::vector<NeighborPos> neighbors; // список соседей
 
     void sendPosition(float lat, float lon, const char *reason);
+    void sendProtobufData (const protobufSender &rawPacket, const char *reason);
     float calculateDistance(float lat1, float lon1, float lat2, float lon2);
     void cleanupNeighbors(); // удаляет устаревших соседей
->>>>>>> 2d6cff331 (Добавлен модуль AutoNeighborMessage: отправка позиции соседям с hop_limit=0 при перемещении, нахождении рядом с соседом или по таймеру.)
 };
 
 extern AutoNeighborMessage *autoNeighborMessage;
