@@ -92,7 +92,6 @@ void AutoNeighborMessage::sendProtobufData(const protobufSender &rawPacket, cons
     meshtastic_MeshPacket *p = allocDataPacket();
     if(!p){
         LOG_ERROR("Failed to allocate meshpacket");
-        service->releaseToPool(p);
     }
     // конфигурирование
     p->which_payload_variant = meshtastic_MeshPacket_decoded_tag;
